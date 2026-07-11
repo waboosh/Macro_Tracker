@@ -34,6 +34,21 @@ python main.py               # creates/seeds macro_tracker.db and launches the G
 `pip install -r requirements.txt` fails due to a Python version/platform mismatch, run
 `pip install matplotlib` instead and let pip pick compatible versions.
 
+## Building a standalone desktop app
+
+A prebuilt, double-clickable `.exe` doesn't require Python or a terminal to launch — useful for
+day-to-day personal use. Rebuild it after any code change:
+
+```bash
+pip install pyinstaller
+pyinstaller --noconfirm --onefile --windowed --name "Macro Tracker" --icon "assets\icon.ico" --add-data "data;data" main.py
+```
+
+This produces `dist/Macro Tracker.exe`, a self-contained executable. The database
+(`macro_tracker.db`) is created next to the `.exe` on first run and persists across runs/rebuilds,
+so your logged data survives even after you rebuild the app. Pin `dist/Macro Tracker.exe` to the
+Start menu/taskbar, or create a desktop shortcut to it, for one-click access.
+
 ## Project structure
 
 - `database.py` — SQLite backend: schema, CRUD, CSV import/seed, macro totals.
