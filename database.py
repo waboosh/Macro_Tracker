@@ -194,3 +194,20 @@ def get_daily_macro_totals(conn, date):
     """, (date,))
     return cursor.fetchone()  # (total_calories, total_protein, total_carbs, total_fat)
 
+def get_macro_totals_by_date_range(conn, start_date, end_date):
+    """Sum calories/protein/carbs/fat per day for dates within [start_date, end_date]."""
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT le.date,
+               SUM(f.calories * le.servings),
+               SUM(f.protein * le.servings),
+               SUM(f.carbs * le.servings),
+               SUM(f.fat * le.servings)
+        FROM log_entries le
+        JOIN foods f ON le.food_id = f.id
+        WHERE le.date BETWEEN ? AND ?
+        GROUP BY le.date
+        ORDER BY le.date
+    """, (start_date, end_date))
+    return cursor.fetchall()  # [(date, total_calories, total_protein, total_carbs, total_fat), ...]
+
