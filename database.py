@@ -113,7 +113,7 @@ def seed_public_foods(conn, csv_path):
     try:
         cursor = conn.cursor()
         cursor.execute("SELECT COUNT(*) FROM foods")
-        count = cursor.fetchone()  # get the count out of the fetched result
+        count = cursor.fetchone()[0]  # get the count out of the fetched result
 
         if count > 0:
             print("Foods table already seeded, skipping.")
