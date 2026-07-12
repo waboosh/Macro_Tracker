@@ -42,12 +42,35 @@ def initialize_database(conn):
                 date TEXT NOT NULL UNIQUE,
                 weight_lbs REAL NOT NULL)
                        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_profile(
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                gender TEXT NOT NULL,
+                height_in REAL NOT NULL,
+                age INTEGER NOT NULL)
+                       """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS recipes(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                food_id INTEGER NOT NULL,
+                FOREIGN KEY (food_id) REFERENCES foods(id) ON DELETE CASCADE)
+                       """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS recipe_ingredients(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                recipe_id INTEGER NOT NULL,
+                food_id INTEGER NOT NULL,
+                amount REAL NOT NULL,
+                FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE,
+                FOREIGN KEY (food_id) REFERENCES foods(id))
+                       """)
         conn.commit()
     except sqlite3.Error as e:
         print(f"Error initializing database: {e}")
 
 def add_food(conn, name, serving_size, serving_unit, calories, protein, carbs, fat, source):
-    """Add a new food item to the foods table."""
+    """Add a new food item to the foods table. Returns the new food's id, or None on error."""
     try:
         cursor = conn.cursor()
         cursor.execute("""
@@ -55,8 +78,34 @@ def add_food(conn, name, serving_size, serving_unit, calories, protein, carbs, f
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """, (name, serving_size, serving_unit, calories, protein, carbs, fat, source))
         conn.commit()
+        return cursor.lastrowid
     except sqlite3.Error as e:
         print(f"Error adding food: {e}")
+        return None
+
+def update_food(conn, food_id, name, serving_size, serving_unit, calories, protein, carbs, fat):
+    """Overwrite an existing food's name/serving/macros in place (used to keep a recipe's
+    virtual food row in sync with its current ingredients)."""
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE foods
+            SET name = ?, serving_size = ?, serving_unit = ?, calories = ?, protein = ?, carbs = ?, fat = ?
+            WHERE id = ?
+        """, (name, serving_size, serving_unit, calories, protein, carbs, fat, food_id))
+        conn.commit()
+    except sqlite3.Error as e:
+        print(f"Error updating food: {e}")
+
+def get_food_by_id(conn, food_id):
+    """Retrieve a single food row by id, or None if it doesn't exist."""
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM foods WHERE id = ?", (food_id,))
+        return cursor.fetchone()
+    except sqlite3.Error as e:
+        print(f"Error retrieving food: {e}")
+        return None
 
 def get_all_foods(conn):
     """Retrieve all food items from the foods table."""
@@ -225,6 +274,40 @@ def get_bodyweight(conn, date):
         print(f"Error retrieving bodyweight: {e}")
         return None
 
+def get_latest_bodyweight(conn):
+    """Retrieve the most recently logged bodyweight (by date), or None if none logged."""
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT weight_lbs FROM bodyweight_logs ORDER BY date DESC, id DESC LIMIT 1")
+        row = cursor.fetchone()
+        return row[0] if row else None
+    except sqlite3.Error as e:
+        print(f"Error retrieving latest bodyweight: {e}")
+        return None
+
+def set_user_profile(conn, gender, height_in, age):
+    """Save (or update) the single saved user profile (gender, height, age)."""
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO user_profile (id, gender, height_in, age) VALUES (1, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                gender = excluded.gender, height_in = excluded.height_in, age = excluded.age
+        """, (gender, height_in, age))
+        conn.commit()
+    except sqlite3.Error as e:
+        print(f"Error saving user profile: {e}")
+
+def get_user_profile(conn):
+    """Retrieve the saved user profile as (gender, height_in, age), or None if not set."""
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT gender, height_in, age FROM user_profile WHERE id = 1")
+        return cursor.fetchone()
+    except sqlite3.Error as e:
+        print(f"Error retrieving user profile: {e}")
+        return None
+
 def get_macro_totals_by_date_range(conn, start_date, end_date):
     """Sum calories/protein/carbs/fat per day for dates within [start_date, end_date]."""
     cursor = conn.cursor()
@@ -241,4 +324,96 @@ def get_macro_totals_by_date_range(conn, start_date, end_date):
         ORDER BY le.date
     """, (start_date, end_date))
     return cursor.fetchall()  # [(date, total_calories, total_protein, total_carbs, total_fat), ...]
+
+def get_log_entries_by_date_range(conn, start_date, end_date):
+    """Retrieve individual log entries (with computed macros) for dates within
+    [start_date, end_date], for exporting to CSV."""
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT le.date, le.meal_type, f.name, le.servings,
+               f.calories * le.servings, f.protein * le.servings,
+               f.carbs * le.servings, f.fat * le.servings
+        FROM log_entries le
+        JOIN foods f ON le.food_id = f.id
+        WHERE le.date BETWEEN ? AND ?
+        ORDER BY le.date, le.meal_type
+    """, (start_date, end_date))
+    return cursor.fetchall()  # [(date, meal_type, food_name, servings, calories, protein, carbs, fat), ...]
+
+def _compute_recipe_totals(conn, ingredients):
+    """Sum calories/protein/carbs/fat for a list of (food_id, amount) ingredients,
+    scaling each by amount / that food's native serving size."""
+    totals = [0.0, 0.0, 0.0, 0.0]
+    cursor = conn.cursor()
+    for food_id, amount in ingredients:
+        cursor.execute("SELECT serving_size, calories, protein, carbs, fat FROM foods WHERE id = ?", (food_id,))
+        row = cursor.fetchone()
+        if row is None:
+            continue
+        serving_size, calories, protein, carbs, fat = row
+        servings = amount / serving_size if serving_size else 0
+        totals[0] += calories * servings
+        totals[1] += protein * servings
+        totals[2] += carbs * servings
+        totals[3] += fat * servings
+    return tuple(totals)  # (calories, protein, carbs, fat)
+
+def save_recipe(conn, name, ingredients, recipe_id=None):
+    """Create or update a recipe from a list of (food_id, amount) ingredients.
+
+    The recipe is represented as a single "virtual" food (1 serving = the whole
+    batch) so it can be searched, logged, and shown in the Daily Log/Graphs tabs
+    exactly like any other food. Editing a recipe updates that food's macros in
+    place, so existing log entries for it reflect the recipe's current makeup."""
+    calories, protein, carbs, fat = _compute_recipe_totals(conn, ingredients)
+    try:
+        cursor = conn.cursor()
+        if recipe_id is None:
+            food_id = add_food(conn, name, 1, "serving", calories, protein, carbs, fat, "recipe")
+            cursor.execute("INSERT INTO recipes (name, food_id) VALUES (?, ?)", (name, food_id))
+            recipe_id = cursor.lastrowid
+        else:
+            cursor.execute("SELECT food_id FROM recipes WHERE id = ?", (recipe_id,))
+            row = cursor.fetchone()
+            if row is None:
+                raise ValueError(f"No recipe with id {recipe_id}")
+            food_id = row[0]
+            update_food(conn, food_id, name, 1, "serving", calories, protein, carbs, fat)
+            cursor.execute("UPDATE recipes SET name = ? WHERE id = ?", (name, recipe_id))
+            cursor.execute("DELETE FROM recipe_ingredients WHERE recipe_id = ?", (recipe_id,))
+
+        cursor.executemany(
+            "INSERT INTO recipe_ingredients (recipe_id, food_id, amount) VALUES (?, ?, ?)",
+            [(recipe_id, food_id, amount) for food_id, amount in ingredients],
+        )
+        conn.commit()
+        return recipe_id
+    except sqlite3.Error as e:
+        print(f"Error saving recipe: {e}")
+        return None
+
+def get_all_recipes(conn):
+    """Retrieve all recipes as (recipe_id, name, food_id)."""
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, name, food_id FROM recipes ORDER BY name")
+        return cursor.fetchall()
+    except sqlite3.Error as e:
+        print(f"Error retrieving recipes: {e}")
+        return []
+
+def get_recipe_ingredients(conn, recipe_id):
+    """Retrieve a recipe's ingredients as (food_id, food_name, amount, serving_size, serving_unit)."""
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT f.id, f.name, ri.amount, f.serving_size, f.serving_unit
+            FROM recipe_ingredients ri
+            JOIN foods f ON ri.food_id = f.id
+            WHERE ri.recipe_id = ?
+        """, (recipe_id,))
+        return cursor.fetchall()
+    except sqlite3.Error as e:
+        print(f"Error retrieving recipe ingredients: {e}")
+        return []
 
