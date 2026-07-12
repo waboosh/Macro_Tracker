@@ -47,8 +47,12 @@ def initialize_database(conn):
                 id INTEGER PRIMARY KEY CHECK (id = 1),
                 gender TEXT NOT NULL,
                 height_in REAL NOT NULL,
-                age INTEGER NOT NULL)
+                age INTEGER NOT NULL,
+                protein_per_lb REAL NOT NULL DEFAULT 0.7)
                        """)
+        existing_columns = [row[1] for row in cursor.execute("PRAGMA table_info(user_profile)")]
+        if "protein_per_lb" not in existing_columns:
+            cursor.execute("ALTER TABLE user_profile ADD COLUMN protein_per_lb REAL NOT NULL DEFAULT 0.7")
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS recipes(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -285,24 +289,25 @@ def get_latest_bodyweight(conn):
         print(f"Error retrieving latest bodyweight: {e}")
         return None
 
-def set_user_profile(conn, gender, height_in, age):
-    """Save (or update) the single saved user profile (gender, height, age)."""
+def set_user_profile(conn, gender, height_in, age, protein_per_lb):
+    """Save (or update) the single saved user profile (gender, height, age, protein target)."""
     try:
         cursor = conn.cursor()
         cursor.execute("""
-            INSERT INTO user_profile (id, gender, height_in, age) VALUES (1, ?, ?, ?)
+            INSERT INTO user_profile (id, gender, height_in, age, protein_per_lb) VALUES (1, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
-                gender = excluded.gender, height_in = excluded.height_in, age = excluded.age
-        """, (gender, height_in, age))
+                gender = excluded.gender, height_in = excluded.height_in, age = excluded.age,
+                protein_per_lb = excluded.protein_per_lb
+        """, (gender, height_in, age, protein_per_lb))
         conn.commit()
     except sqlite3.Error as e:
         print(f"Error saving user profile: {e}")
 
 def get_user_profile(conn):
-    """Retrieve the saved user profile as (gender, height_in, age), or None if not set."""
+    """Retrieve the saved user profile as (gender, height_in, age, protein_per_lb), or None if not set."""
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT gender, height_in, age FROM user_profile WHERE id = 1")
+        cursor.execute("SELECT gender, height_in, age, protein_per_lb FROM user_profile WHERE id = 1")
         return cursor.fetchone()
     except sqlite3.Error as e:
         print(f"Error retrieving user profile: {e}")

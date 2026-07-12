@@ -676,6 +676,7 @@ def build_food_database_tab(parent, conn):
     search_entry.pack(side="left", fill="x", expand=True, padx=5)
 
     columns = ("food", "serving", "calories", "protein", "carbs", "fat", "source")
+    columns_without_source = ("food", "serving", "calories", "protein", "carbs", "fat")
     tree = ttk.Treeview(parent, columns=columns, show="headings", height=10)
     headings = {
         "food": "Food",
@@ -690,6 +691,7 @@ def build_food_database_tab(parent, conn):
         tree.heading(col, text=text)
     for col in ("serving", "calories", "protein", "carbs", "fat", "source"):
         tree.column(col, width=85, anchor="e" if col != "source" else "center")
+    tree["displaycolumns"] = columns_without_source
     tree.pack(fill="both", expand=True, padx=10, pady=(0, 10))
 
     def populate(rows):
@@ -723,6 +725,14 @@ def build_food_database_tab(parent, conn):
         refresh()
 
     ttk.Button(search_frame, text="Show All", command=show_all).pack(side="left", padx=(5, 0))
+
+    source_column_visible = {"value": False}
+
+    def toggle_source_column():
+        source_column_visible["value"] = not source_column_visible["value"]
+        tree["displaycolumns"] = columns if source_column_visible["value"] else columns_without_source
+
+    ttk.Button(search_frame, text="Source", command=toggle_source_column).pack(side="left", padx=(5, 0))
 
     add_frame = ttk.LabelFrame(parent, text="Add Custom Food", padding=10)
     add_frame.pack(fill="x", padx=10, pady=(0, 10))
@@ -831,6 +841,8 @@ def build_tracking_tab(parent, conn):
     current_bw_label.pack(side="top", fill="x")
     current_profile_label = ttk.Label(top_info_frame, text="", anchor="e")
     current_profile_label.pack(side="top", fill="x")
+    current_protein_target_label = ttk.Label(top_info_frame, text="", anchor="e")
+    current_protein_target_label.pack(side="top", fill="x")
 
     def refresh_current_info():
         latest_weight = get_latest_bodyweight(conn)
@@ -842,11 +854,20 @@ def build_tracking_tab(parent, conn):
         if profile is None:
             current_profile_label.config(text="Current saved profile: not set")
         else:
-            gender, height_in, age = profile
+            gender, height_in, age, _protein_per_lb = profile
             ft, inches = divmod(height_in, 12)
             current_profile_label.config(
                 text=f"Current saved profile: {gender}, {int(ft)}'{inches:g}\", {int(age)} yrs"
             )
+
+        if latest_weight is not None and profile is not None:
+            protein_per_lb = profile[3]
+            target_protein = protein_per_lb * latest_weight
+            current_protein_target_label.config(
+                text=f"Target protein: {target_protein:.1f} g ({protein_per_lb:g} g/lb x {latest_weight:g} lbs)"
+            )
+        else:
+            current_protein_target_label.config(text="Target protein: not set")
 
     controls_frame = ttk.Frame(parent, padding=10)
     controls_frame.pack(fill="x")
@@ -891,42 +912,52 @@ def build_tracking_tab(parent, conn):
     age_entry = ttk.Entry(profile_frame, textvariable=age_var, width=6)
     age_entry.grid(row=0, column=8, sticky="w", padx=(2, 15))
 
+    ttk.Label(profile_frame, text="Protein target (g/lb bodyweight):").grid(
+        row=1, column=0, columnspan=3, sticky="w", pady=(8, 0)
+    )
+    protein_target_var = tk.StringVar(value=f"{PROTEIN_PER_LB:g}")
+    protein_target_entry = ttk.Entry(profile_frame, textvariable=protein_target_var, width=6)
+    protein_target_entry.grid(row=1, column=3, sticky="w", pady=(8, 0))
+
     profile_status = ttk.Label(profile_frame, text="")
-    profile_status.grid(row=1, column=0, columnspan=9, sticky="w", pady=(8, 0))
+    profile_status.grid(row=2, column=0, columnspan=9, sticky="w", pady=(8, 0))
 
     def save_profile():
         try:
             height_ft = float(height_ft_var.get() or 0)
             height_in_extra = float(height_in_var.get() or 0)
             age = int(age_var.get())
+            protein_per_lb = float(protein_target_var.get())
         except ValueError:
-            profile_status.config(text="Height and age must be numbers.")
+            profile_status.config(text="Height, age, and protein target must be numbers.")
             return
         height_in = height_ft * 12 + height_in_extra
-        if height_in <= 0 or age <= 0:
-            profile_status.config(text="Height and age must be positive.")
+        if height_in <= 0 or age <= 0 or protein_per_lb <= 0:
+            profile_status.config(text="Height, age, and protein target must be positive.")
             return
 
-        set_user_profile(conn, gender_var.get(), height_in, age)
+        set_user_profile(conn, gender_var.get(), height_in, age, protein_per_lb)
         profile_status.config(text="Profile saved.")
         refresh_current_info()
+        update_results()
 
     ttk.Button(profile_frame, text="Save Profile", command=save_profile).grid(
         row=0, column=9, sticky="ew"
     )
-    for widget in (height_ft_entry, height_in_entry, age_entry):
+    for widget in (height_ft_entry, height_in_entry, age_entry, protein_target_entry):
         widget.bind("<Return>", lambda _event: save_profile())
 
     def load_profile():
         profile = get_user_profile(conn)
         if profile is None:
             return
-        gender, height_in, age = profile
+        gender, height_in, age, protein_per_lb = profile
         ft, inches = divmod(height_in, 12)
         gender_var.set(gender)
         height_ft_var.set(str(int(ft)))
         height_in_var.set(f"{inches:g}")
         age_var.set(str(int(age)))
+        protein_target_var.set(f"{protein_per_lb:g}")
 
     results_frame = ttk.Frame(parent, padding=10)
     results_frame.pack(fill="x")
@@ -958,9 +989,14 @@ def build_tracking_tab(parent, conn):
             progress_var.set(0)
             return
 
-        min_protein = PROTEIN_PER_LB * weight
+        try:
+            protein_per_lb = float(protein_target_var.get())
+        except ValueError:
+            protein_per_lb = PROTEIN_PER_LB
+
+        min_protein = protein_per_lb * weight
         min_protein_label.config(
-            text=f"Minimum protein intake ({PROTEIN_PER_LB:g} x {weight:g} lbs): {min_protein:.1f} g"
+            text=f"Minimum protein intake ({protein_per_lb:g} x {weight:g} lbs): {min_protein:.1f} g"
         )
 
         _, protein, _, _ = get_daily_macro_totals(conn, date_var.get())
@@ -1031,7 +1067,7 @@ def build_tracking_tab(parent, conn):
             calories_eaten_label.config(text="")
             calorie_progress_var.set(0)
             return
-        gender, height_in, age = profile
+        gender, height_in, age, _protein_per_lb = profile
 
         weight_text = weight_var.get().strip()
         if not weight_text:
