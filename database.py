@@ -69,6 +69,11 @@ def initialize_database(conn):
                 FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE,
                 FOREIGN KEY (food_id) REFERENCES foods(id))
                        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS app_settings(
+                key TEXT PRIMARY KEY,
+                value TEXT)
+                       """)
         conn.commit()
     except sqlite3.Error as e:
         print(f"Error initializing database: {e}")
@@ -288,6 +293,29 @@ def get_latest_bodyweight(conn):
     except sqlite3.Error as e:
         print(f"Error retrieving latest bodyweight: {e}")
         return None
+
+def set_setting(conn, key, value):
+    """Save (or update) a single app setting (e.g. an API key)."""
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO app_settings (key, value) VALUES (?, ?)
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value
+        """, (key, value))
+        conn.commit()
+    except sqlite3.Error as e:
+        print(f"Error saving setting {key}: {e}")
+
+def get_setting(conn, key, default=None):
+    """Retrieve a single app setting, or default if not set."""
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT value FROM app_settings WHERE key = ?", (key,))
+        row = cursor.fetchone()
+        return row[0] if row else default
+    except sqlite3.Error as e:
+        print(f"Error retrieving setting {key}: {e}")
+        return default
 
 def set_user_profile(conn, gender, height_in, age, protein_per_lb):
     """Save (or update) the single saved user profile (gender, height, age, protein target)."""

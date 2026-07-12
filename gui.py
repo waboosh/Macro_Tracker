@@ -1,4 +1,6 @@
 import csv
+import queue
+import threading
 import tkinter as tk
 from datetime import date, timedelta
 from tkinter import filedialog, messagebox, ttk
@@ -19,14 +21,19 @@ from database import (
     get_log_entries_by_date_range,
     get_macro_totals_by_date_range,
     get_recipe_ingredients,
+    get_setting,
     get_user_profile,
     import_custom_foods,
     save_recipe,
     search_foods_by_name,
     set_bodyweight,
+    set_setting,
     set_user_profile,
 )
+from fdc_client import FdcApiError, search_foods as search_usda_foods
 from graphs import METRICS, build_metric_figure
+
+FDC_API_KEY_SETTING = "fdc_api_key"
 
 MEAL_TYPES = ["Breakfast", "Lunch", "Dinner", "Snack"]
 
@@ -89,13 +96,30 @@ def build_add_entry_tab(parent, conn):
     results_tree.pack(fill="both", expand=True, padx=10, pady=(0, 10))
     results_by_id = {}  # food_id -> full row, keyed to survive re-searches
 
+    online_frame = ttk.Frame(parent, padding=10)
+    online_status_label = ttk.Label(online_frame, text="")
+    online_status_label.pack(anchor="w")
+    online_search_button = ttk.Button(online_frame, text="Search USDA Online")
+    online_search_button.pack(anchor="w", pady=(2, 5))
+
+    online_columns = ("food", "serving", "calories", "protein", "carbs", "fat")
+    online_results_tree = ttk.Treeview(online_frame, columns=online_columns, show="headings", height=5)
+    for col, text in zip(online_columns, ("Food", "Serving", "Calories", "Protein (g)", "Carbs (g)", "Fat (g)")):
+        online_results_tree.heading(col, text=text)
+    for col in ("serving", "calories", "protein", "carbs", "fat"):
+        online_results_tree.column(col, width=90, anchor="e")
+    online_results_tree.pack(fill="x")
+    online_results_by_index = {}
+
     def run_search(*_):
         results_tree.delete(*results_tree.get_children())
         results_by_id.clear()
+        online_frame.pack_forget()
         name = search_var.get().strip()
         if not name:
             return
-        for row in search_foods_by_name(conn, name):
+        rows = search_foods_by_name(conn, name)
+        for row in rows:
             food_id, food_name, serving_size, serving_unit, calories, protein, carbs, fat = row[:8]
             results_by_id[food_id] = row
             results_tree.insert(
@@ -111,10 +135,101 @@ def build_add_entry_tab(parent, conn):
                     f"{fat:g}",
                 ),
             )
+        if not rows:
+            online_status_label.config(text=f"No local matches for '{name}'.")
+            online_results_tree.delete(*online_results_tree.get_children())
+            online_results_by_index.clear()
+            online_frame.pack(fill="x", before=entry_frame)
 
     search_entry.bind("<Return>", run_search)
     search_var.trace_add("write", run_search)
     ttk.Button(search_frame, text="Search", command=run_search).pack(side="left")
+
+    online_result_queue = queue.Queue()
+
+    def search_online():
+        api_key = get_setting(conn, FDC_API_KEY_SETTING)
+        if not api_key:
+            online_status_label.config(text="No USDA API key set. Add one in the Settings tab.")
+            return
+        name = search_var.get().strip()
+        if not name:
+            return
+
+        online_status_label.config(text="Searching USDA FoodData Central...")
+        online_search_button.config(state="disabled")
+
+        def worker():
+            try:
+                online_result_queue.put((search_usda_foods(api_key, name), None))
+            except FdcApiError as e:
+                online_result_queue.put(([], str(e)))
+
+        threading.Thread(target=worker, daemon=True).start()
+        parent.after(100, poll_online_results)
+
+    def poll_online_results():
+        try:
+            results, error = online_result_queue.get_nowait()
+        except queue.Empty:
+            parent.after(100, poll_online_results)
+            return
+        on_online_results(results, error)
+
+    def on_online_results(results, error):
+        online_search_button.config(state="normal")
+        online_results_tree.delete(*online_results_tree.get_children())
+        online_results_by_index.clear()
+        if error:
+            online_status_label.config(text=error)
+            return
+        if not results:
+            online_status_label.config(text="No USDA results found.")
+            return
+        online_status_label.config(
+            text=f"Found {len(results)} USDA result(s). Select one to add it to your food database."
+        )
+        for i, r in enumerate(results):
+            online_results_by_index[i] = r
+            online_results_tree.insert(
+                "",
+                tk.END,
+                iid=str(i),
+                values=(
+                    r["name"],
+                    f"{r['serving_size']:g} {r['serving_unit']}",
+                    f"{r['calories']:g}",
+                    f"{r['protein']:g}",
+                    f"{r['carbs']:g}",
+                    f"{r['fat']:g}",
+                ),
+            )
+
+    online_search_button.config(command=search_online)
+
+    def on_online_select(_event):
+        selection = online_results_tree.selection()
+        if not selection:
+            return
+        r = online_results_by_index[int(selection[0])]
+        food_id = add_food(
+            conn, r["name"], r["serving_size"], r["serving_unit"],
+            r["calories"], r["protein"], r["carbs"], r["fat"], "usda",
+        )
+        selected_food["id"] = food_id
+        selected_food["name"] = r["name"]
+        selected_food["serving_size"] = r["serving_size"]
+        selected_food["serving_unit"] = r["serving_unit"]
+        selected_label.config(
+            text=f"Selected food: {r['name']} ({r['serving_size']:g} {r['serving_unit']} per serving)"
+        )
+        amount_var.set("")
+        servings_var.set("1")
+        amount_label.config(text=f"{label_for_unit(r['serving_unit'])} eaten:")
+        amount_entry.config(state="normal")
+        online_status_label.config(text=f"Added '{r['name']}' to your food database and selected it.")
+
+    online_results_tree.bind("<<TreeviewSelect>>", on_online_select)
 
     entry_frame = ttk.Frame(parent, padding=10)
     entry_frame.pack(fill="x")
@@ -1159,6 +1274,48 @@ def build_tracking_tab(parent, conn):
     return load
 
 
+def build_settings_tab(parent, conn):
+    """Configure the USDA FoodData Central API key used as a fallback food search when
+    a food isn't found locally (Add Entry tab)."""
+    frame = ttk.LabelFrame(parent, text="USDA FoodData Central", padding=10)
+    frame.pack(fill="x", padx=10, pady=10)
+
+    ttk.Label(
+        frame,
+        text=(
+            "Used in Add Entry to search USDA's food database when a food isn't found locally.\n"
+            "Get a free API key at fdc.nal.usda.gov/api-key-signup.html, then paste it below."
+        ),
+        justify="left",
+    ).grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 10))
+
+    ttk.Label(frame, text="API key:").grid(row=1, column=0, sticky="w")
+    api_key_var = tk.StringVar(value=get_setting(conn, FDC_API_KEY_SETTING, "") or "")
+    api_key_entry = ttk.Entry(frame, textvariable=api_key_var, width=40, show="*")
+    api_key_entry.grid(row=1, column=1, sticky="ew", padx=(5, 5))
+
+    show_key_var = tk.BooleanVar(value=False)
+
+    def toggle_show_key():
+        api_key_entry.config(show="" if show_key_var.get() else "*")
+
+    ttk.Checkbutton(frame, text="Show", variable=show_key_var, command=toggle_show_key).grid(
+        row=1, column=2, sticky="w"
+    )
+
+    status_label = ttk.Label(frame, text="")
+    status_label.grid(row=2, column=0, columnspan=3, sticky="w", pady=(8, 0))
+
+    def save_key():
+        set_setting(conn, FDC_API_KEY_SETTING, api_key_var.get().strip())
+        status_label.config(text="API key saved.")
+
+    ttk.Button(frame, text="Save", command=save_key).grid(row=3, column=0, sticky="w", pady=(8, 0))
+    api_key_entry.bind("<Return>", lambda _event: save_key())
+
+    frame.columnconfigure(1, weight=1)
+
+
 def main(conn):
     root = tk.Tk()
     root.title("Macro Tracker")
@@ -1172,6 +1329,7 @@ def main(conn):
     log_tab = ttk.Frame(notebook)
     graphs_tab = ttk.Frame(notebook)
     tracking_tab = ttk.Frame(notebook)
+    settings_tab = ttk.Frame(notebook)
 
     notebook.add(add_entry_tab, text="Add Entry")
     notebook.add(database_tab, text="Food Database")
@@ -1179,6 +1337,7 @@ def main(conn):
     notebook.add(log_tab, text="Daily Log")
     notebook.add(graphs_tab, text="Graphs")
     notebook.add(tracking_tab, text="Tracking")
+    notebook.add(settings_tab, text="Settings")
 
     notebook.pack(fill="both", expand=True)
 
@@ -1188,6 +1347,7 @@ def main(conn):
     log_refresh = build_daily_log_tab(log_tab, conn)
     build_graphs_tab(graphs_tab, conn)
     tracking_refresh = build_tracking_tab(tracking_tab, conn)
+    build_settings_tab(settings_tab, conn)
 
     # Refresh a tab's data whenever it's switched to, so changes made in other
     # tabs (e.g. logging a food) show up without needing a manual Load click.
