@@ -2,6 +2,7 @@ import csv
 import queue
 import threading
 import tkinter as tk
+import webbrowser
 from datetime import date, timedelta
 from tkinter import filedialog, messagebox, ttk
 
@@ -10,6 +11,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from database import (
     add_food,
     add_log_entry,
+    delete_all_log_entries,
     delete_log_entry,
     get_all_foods,
     get_all_recipes,
@@ -24,6 +26,7 @@ from database import (
     get_setting,
     get_user_profile,
     import_custom_foods,
+    reset_user_stats,
     save_recipe,
     search_foods_by_name,
     set_bodyweight,
@@ -1187,6 +1190,7 @@ def build_tracking_tab(parent, conn):
 
     calorie_result_label = ttk.Label(calorie_frame, text="", wraplength=650, justify="left")
     calories_eaten_label = ttk.Label(calorie_frame, text="", wraplength=650, justify="left")
+    calories_remaining_label = ttk.Label(calorie_frame, text="", wraplength=650, justify="left")
 
     calorie_progress_var = tk.DoubleVar(value=0)
     calorie_progress_bar = ttk.Progressbar(
@@ -1199,6 +1203,7 @@ def build_tracking_tab(parent, conn):
         if profile is None:
             calorie_result_label.config(text="Fill in and save your profile (gender, height, age) first.")
             calories_eaten_label.config(text="")
+            calories_remaining_label.config(text="")
             calorie_progress_var.set(0)
             return
         gender, height_in, age, _protein_per_lb = profile
@@ -1207,6 +1212,7 @@ def build_tracking_tab(parent, conn):
         if not weight_text:
             calorie_result_label.config(text="Enter/load a bodyweight first.")
             calories_eaten_label.config(text="")
+            calories_remaining_label.config(text="")
             calorie_progress_var.set(0)
             return
         try:
@@ -1214,6 +1220,7 @@ def build_tracking_tab(parent, conn):
         except ValueError:
             calorie_result_label.config(text="Bodyweight must be a number.")
             calories_eaten_label.config(text="")
+            calories_remaining_label.config(text="")
             calorie_progress_var.set(0)
             return
 
@@ -1262,6 +1269,14 @@ def build_tracking_tab(parent, conn):
         )
         calorie_progress_var.set(min(max(pct, 0), 100))
 
+        remaining = target_calories - calories_eaten
+        if remaining >= 0:
+            calories_remaining_label.config(text=f"Calories remaining for {mode} goal: {remaining:.0f} kcal")
+        else:
+            calories_remaining_label.config(
+                text=f"Calories remaining for {mode} goal: 0 kcal ({-remaining:.0f} kcal over target)"
+            )
+
     button_frame = ttk.Frame(calorie_frame)
     button_frame.grid(row=2, column=0, columnspan=4, sticky="ew", pady=(8, 0))
     ttk.Button(button_frame, text="Gain Weight", command=lambda: compute_calories("gain")).pack(
@@ -1274,7 +1289,8 @@ def build_tracking_tab(parent, conn):
 
     calorie_result_label.grid(row=3, column=0, columnspan=4, sticky="w", pady=(10, 0))
     calories_eaten_label.grid(row=4, column=0, columnspan=4, sticky="w", pady=(5, 0))
-    calorie_progress_bar.grid(row=5, column=0, columnspan=4, sticky="ew", pady=(8, 0))
+    calories_remaining_label.grid(row=5, column=0, columnspan=4, sticky="w", pady=(5, 0))
+    calorie_progress_bar.grid(row=6, column=0, columnspan=4, sticky="ew", pady=(8, 0))
 
     for c in range(4):
         calorie_frame.columnconfigure(c, weight=1)
@@ -1285,25 +1301,35 @@ def build_tracking_tab(parent, conn):
     return load
 
 
+FDC_SIGNUP_URL = "https://fdc.nal.usda.gov/api-key-signup.html"
+
+
 def build_settings_tab(parent, conn):
-    """Configure the USDA FoodData Central API key used as a fallback food search when
-    a food isn't found locally (Add Entry tab)."""
+    """Configure the USDA FoodData Central API key (used as a fallback food search in
+    Add Entry) and manage/reset saved app data."""
     frame = ttk.LabelFrame(parent, text="USDA FoodData Central", padding=10)
     frame.pack(fill="x", padx=10, pady=10)
 
     ttk.Label(
-        frame,
-        text=(
-            "Used in Add Entry to search USDA's food database when a food isn't found locally.\n"
-            "Get a free API key at fdc.nal.usda.gov/api-key-signup.html, then paste it below."
-        ),
+        frame, text="Used in Add Entry to search USDA's food database when a food isn't found locally.",
         justify="left",
-    ).grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 10))
+    ).grid(row=0, column=0, columnspan=3, sticky="w")
 
-    ttk.Label(frame, text="API key:").grid(row=1, column=0, sticky="w")
+    link_row = ttk.Frame(frame)
+    link_row.grid(row=1, column=0, columnspan=3, sticky="w", pady=(0, 10))
+    ttk.Label(link_row, text="Get a free API key at").pack(side="left")
+    link_label = ttk.Label(
+        link_row, text="fdc.nal.usda.gov/api-key-signup.html",
+        foreground="#0645AD", cursor="hand2", font=("TkDefaultFont", 9, "underline"),
+    )
+    link_label.pack(side="left", padx=(4, 0))
+    link_label.bind("<Button-1>", lambda _event: webbrowser.open(FDC_SIGNUP_URL))
+    ttk.Label(link_row, text=", then paste it below.").pack(side="left")
+
+    ttk.Label(frame, text="API key:").grid(row=2, column=0, sticky="w")
     api_key_var = tk.StringVar(value=get_setting(conn, FDC_API_KEY_SETTING, "") or "")
     api_key_entry = ttk.Entry(frame, textvariable=api_key_var, width=40, show="*")
-    api_key_entry.grid(row=1, column=1, sticky="ew", padx=(5, 5))
+    api_key_entry.grid(row=2, column=1, sticky="ew", padx=(5, 5))
 
     show_key_var = tk.BooleanVar(value=False)
 
@@ -1311,20 +1337,61 @@ def build_settings_tab(parent, conn):
         api_key_entry.config(show="" if show_key_var.get() else "*")
 
     ttk.Checkbutton(frame, text="Show", variable=show_key_var, command=toggle_show_key).grid(
-        row=1, column=2, sticky="w"
+        row=2, column=2, sticky="w"
     )
 
-    status_label = ttk.Label(frame, text="")
-    status_label.grid(row=2, column=0, columnspan=3, sticky="w", pady=(8, 0))
+    key_status_label = ttk.Label(frame, text="")
+    key_status_label.grid(row=3, column=0, columnspan=3, sticky="w", pady=(8, 0))
 
     def save_key():
         set_setting(conn, FDC_API_KEY_SETTING, api_key_var.get().strip())
-        status_label.config(text="API key saved.")
+        key_status_label.config(text="API key saved.")
 
-    ttk.Button(frame, text="Save", command=save_key).grid(row=3, column=0, sticky="w", pady=(8, 0))
+    ttk.Button(frame, text="Save", command=save_key).grid(row=4, column=0, sticky="w", pady=(8, 0))
     api_key_entry.bind("<Return>", lambda _event: save_key())
 
     frame.columnconfigure(1, weight=1)
+
+    reset_frame = ttk.LabelFrame(parent, text="Reset Data", padding=10)
+    reset_frame.pack(fill="x", padx=10, pady=(0, 10))
+
+    reset_status_label = ttk.Label(reset_frame, text="")
+
+    def reset_stats_clicked():
+        if messagebox.askyesno(
+            "Reset Tracking Stats",
+            "This permanently deletes your saved bodyweight history, profile "
+            "(gender/height/age), and protein target. Logged food entries are not affected.\n\n"
+            "This cannot be undone. Continue?",
+        ):
+            reset_user_stats(conn)
+            reset_status_label.config(text="Tracking stats reset.")
+
+    ttk.Button(
+        reset_frame, text="Reset Tracking Stats", command=reset_stats_clicked
+    ).grid(row=0, column=0, sticky="w")
+    ttk.Label(
+        reset_frame, text="Clears saved bodyweight, profile, and protein target.", foreground="#666666",
+    ).grid(row=0, column=1, sticky="w", padx=(10, 0))
+
+    def delete_logs_clicked():
+        if messagebox.askyesno(
+            "Delete All Logs",
+            "This permanently deletes every logged food entry across all dates. "
+            "Your food database, recipes, and tracking stats are not affected.\n\n"
+            "This cannot be undone. Continue?",
+        ):
+            delete_all_log_entries(conn)
+            reset_status_label.config(text="All log entries deleted.")
+
+    ttk.Button(
+        reset_frame, text="Delete All Logs", command=delete_logs_clicked
+    ).grid(row=1, column=0, sticky="w", pady=(8, 0))
+    ttk.Label(
+        reset_frame, text="Permanently deletes every logged food entry.", foreground="#666666",
+    ).grid(row=1, column=1, sticky="w", padx=(10, 0), pady=(8, 0))
+
+    reset_status_label.grid(row=2, column=0, columnspan=2, sticky="w", pady=(8, 0))
 
 
 def main(conn):

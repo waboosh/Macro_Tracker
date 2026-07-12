@@ -450,3 +450,24 @@ def get_recipe_ingredients(conn, recipe_id):
         print(f"Error retrieving recipe ingredients: {e}")
         return []
 
+def reset_user_stats(conn):
+    """Permanently clear the saved bodyweight history and profile (gender, height,
+    age, protein target). Does not touch logged food entries or the food database."""
+    try:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM bodyweight_logs")
+        cursor.execute("DELETE FROM user_profile")
+        conn.commit()
+    except sqlite3.Error as e:
+        print(f"Error resetting user stats: {e}")
+
+def delete_all_log_entries(conn):
+    """Permanently delete every logged food entry across all dates. Does not touch
+    the food database, recipes, bodyweight history, or profile."""
+    try:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM log_entries")
+        conn.commit()
+    except sqlite3.Error as e:
+        print(f"Error deleting all log entries: {e}")
+
