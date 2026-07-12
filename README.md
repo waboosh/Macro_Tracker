@@ -3,6 +3,14 @@
 A desktop app for logging food and tracking daily macros. Log what you ate and how much,
 and the app totals up your calories, protein, carbs, and fat for the day.
 
+## Screenshots
+
+| | |
+|---|---|
+| ![Add Entry](screenshots/add_entry.png) | ![Food Database](screenshots/food_database.png) |
+| ![Recipes](screenshots/recipes.png) | ![Daily Log](screenshots/daily_log.png) |
+| ![Graphs](screenshots/graphs.png) | ![Tracking](screenshots/tracking.png) |
+
 ## Features
 
 - **Add Entry** — search the food database (results filter live as you type), pick an item, and
