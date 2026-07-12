@@ -1,26 +1,93 @@
 name,serving_size,serving_unit,calories,protein_g,carbs_g,fat_g,source
 Chicken Breast (Grilled),100,g,165,31,0,3.6,public
+Chicken Thigh (Grilled),100,g,209,26,0,10.9,public
+Turkey Breast (Roasted),100,g,135,30,0,1,public
 Egg (Large),1,piece,72,6.3,0.4,4.8,public
+Egg White (Large),1,piece,17,3.6,0.2,0.1,public
 Salmon (Baked),100,g,208,20,0,13,public
+Tuna (Canned in Water),100,g,116,25.5,0,0.8,public
+Shrimp (Cooked),100,g,99,24,0.2,0.3,public
+Tilapia (Baked),100,g,128,26,0,2.7,public
 Ground Beef 90/10,100,g,176,20,0,10,public
+Ground Beef 80/20,100,g,254,17,0,20,public
+Beef Sirloin Steak,100,g,183,27,0,7.6,public
+Pork Chop (Grilled),100,g,231,25,0,14,public
+Bacon (Cooked),1,slice,43,3,0.1,3.3,public
 Greek Yogurt (Plain),170,g,100,17,6,0.7,public
+Greek Yogurt (Vanilla),170,g,146,15,19,0.5,public
 Cottage Cheese,113,g,98,11,3.4,4.3,public
 Tofu (Firm),100,g,144,15.5,2.8,8.7,public
+Tempeh,100,g,192,20,7.6,11,public
+Edamame (Cooked),1,cup,189,18.4,15.8,8.1,public
+Whey Protein Powder,30,g,120,24,3,1,public
+Protein Bar,60,g,200,20,22,7,public
+Milk (2%),1,cup,122,8.1,11.7,4.8,public
+Milk (Whole),1,cup,149,7.7,11.7,7.9,public
+Milk (Skim),1,cup,83,8.3,12.2,0.2,public
+Cheddar Cheese,28,g,113,7,0.4,9.3,public
+Mozzarella Cheese,28,g,85,6.3,0.6,6.3,public
+Parmesan Cheese,5,tbsp,22,2,0.2,1.4,public
+Butter,1,tbsp,102,0.1,0,11.5,public
+Cream Cheese,14,tbsp,51,0.9,0.8,5.1,public
 White Rice (Cooked),1,cup,205,4.3,44.5,0.4,public
 Brown Rice (Cooked),1,cup,216,5,45,1.8,public
 Oats (Rolled),0.5,cup,150,5,27,3,public
 Whole Wheat Bread,1,slice,81,4,13.8,1.1,public
+White Bread,1,slice,75,2.6,14,1,public
+Quinoa (Cooked),1,cup,222,8.1,39.4,3.6,public
+Pasta (Cooked),1,cup,221,8.1,43.2,1.3,public
+Whole Wheat Pasta (Cooked),1,cup,174,7.5,37.2,0.8,public
+Bagel (Plain),1,piece,289,11,56,1.7,public
+Tortilla (Flour),1,piece,146,4,24,3.5,public
+Corn Tortilla,1,piece,52,1.4,10.7,0.6,public
+Cornflakes,1,cup,100,2,24,0.1,public
+Granola,0.5,cup,298,8,32,15,public
+Popcorn (Air-Popped),1,cup,31,1,6.2,0.4,public
 Sweet Potato (Baked),1,medium,103,2.3,23.6,0.2,public
+Potato (Baked),1,medium,161,4.3,36.6,0.2,public
+Corn (Cooked),1,cup,143,4.7,31,2.2,public
+Black Beans (Cooked),1,cup,227,15.2,40.8,0.9,public
+Lentils (Cooked),1,cup,230,17.9,39.9,0.8,public
+Chickpeas (Cooked),1,cup,269,14.5,45,4.2,public
+Kidney Beans (Cooked),1,cup,225,15.3,40.4,0.9,public
+Hummus,2,tbsp,70,2,6,4.5,public
 Banana,1,medium,105,1.3,27,0.4,public
 Apple,1,medium,95,0.5,25,0.3,public
+Orange,1,medium,62,1.2,15.4,0.2,public
+Strawberries,1,cup,49,1,11.7,0.5,public
+Blueberries,1,cup,84,1.1,21.4,0.5,public
+Grapes,1,cup,104,1.1,27.3,0.2,public
+Pineapple,1,cup,82,0.9,21.6,0.2,public
+Mango,1,cup,99,1.4,24.7,0.6,public
+Watermelon,1,cup,46,0.9,11.5,0.2,public
+Pear,1,medium,101,0.6,27,0.2,public
+Raisins,0.25,cup,123,1.3,32.5,0.2,public
 Broccoli (Steamed),1,cup,55,3.7,11.2,0.6,public
 Spinach (Raw),2,cup,14,1.7,2.2,0.2,public
+Carrots (Raw),1,cup,52,1.2,12.3,0.3,public
+Bell Pepper (Raw),1,cup,30,1,7,0.3,public
+Tomato,1,medium,22,1.1,4.8,0.2,public
+Cucumber,1,cup,16,0.7,3.8,0.1,public
+Onion,1,cup,64,1.8,14.9,0.2,public
+Green Beans (Cooked),1,cup,44,2.4,9.9,0.4,public
+Cauliflower (Cooked),1,cup,29,2.3,5.3,0.6,public
+Zucchini (Cooked),1,cup,27,2.1,5.5,0.4,public
+Asparagus (Cooked),1,cup,40,4.3,7.4,0.4,public
+Kale (Raw),1,cup,33,2.9,6,0.6,public
+Mushrooms (Cooked),1,cup,44,4.4,8.3,0.5,public
 Avocado,0.5,piece,120,1.5,6.4,10.5,public
 Almonds,28,g,164,6,6.1,14.2,public
 Peanut Butter,2,tbsp,190,7.1,7.7,16,public
 Olive Oil,1,tbsp,119,0,0,13.5,public
-Black Beans (Cooked),1,cup,227,15.2,40.8,0.9,public
-Lentils (Cooked),1,cup,230,17.9,39.9,0.8,public
-Milk (2%),1,cup,122,8.1,11.7,4.8,public
-Cheddar Cheese,28,g,113,7,0.4,9.3,public
-Quinoa (Cooked),1,cup,222,8.1,39.4,3.6,public
+Walnuts,28,g,185,4.3,3.9,18.5,public
+Cashews,28,g,157,5.2,8.6,12.4,public
+Chia Seeds,1,tbsp,58,2,5,3.7,public
+Flaxseed (Ground),1,tbsp,37,1.3,2,3,public
+Coconut Oil,1,tbsp,121,0,0,13.6,public
+Orange Juice,1,cup,112,1.7,25.8,0.5,public
+Black Coffee,1,cup,2,0.3,0,0,public
+Beer (Regular),12,oz,153,1.6,13,0,public
+Wine (Red),5,oz,125,0.1,3.8,0,public
+Dark Chocolate (70-85%),28,g,170,2.2,13,12,public
+Potato Chips,28,g,152,2,15,10,public
+Ice Cream (Vanilla),0.5,cup,137,2.3,16,7.3,public

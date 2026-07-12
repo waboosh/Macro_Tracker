@@ -9,11 +9,13 @@ from database import (
     add_log_entry,
     delete_log_entry,
     get_all_foods,
+    get_bodyweight,
     get_daily_macro_totals,
     get_log_entries_by_date,
     get_macro_totals_by_date_range,
     import_custom_foods,
     search_foods_by_name,
+    set_bodyweight,
 )
 from graphs import METRICS, build_metric_figure
 
@@ -394,6 +396,97 @@ def build_food_database_tab(parent, conn):
     refresh()
 
 
+PROTEIN_PER_LB = 0.7
+
+
+def build_tracking_tab(parent, conn):
+    """Log bodyweight for a date and see minimum protein target vs. logged protein."""
+    controls_frame = ttk.Frame(parent, padding=10)
+    controls_frame.pack(fill="x")
+
+    ttk.Label(controls_frame, text="Date (YYYY-MM-DD):").pack(side="left")
+    date_var = tk.StringVar(value=date.today().isoformat())
+    ttk.Entry(controls_frame, textvariable=date_var, width=12).pack(side="left", padx=5)
+
+    weight_frame = ttk.Frame(parent, padding=10)
+    weight_frame.pack(fill="x")
+
+    ttk.Label(weight_frame, text="Bodyweight (lbs):").pack(side="left")
+    weight_var = tk.StringVar()
+    ttk.Entry(weight_frame, textvariable=weight_var, width=12).pack(side="left", padx=5)
+
+    status_label = ttk.Label(parent, text="")
+    status_label.pack(fill="x", padx=10)
+
+    results_frame = ttk.Frame(parent, padding=10)
+    results_frame.pack(fill="x")
+
+    min_protein_label = ttk.Label(results_frame, text="")
+    min_protein_label.pack(anchor="w", pady=(0, 5))
+
+    logged_protein_label = ttk.Label(results_frame, text="")
+    logged_protein_label.pack(anchor="w")
+
+    progress_var = tk.DoubleVar(value=0)
+    progress_bar = ttk.Progressbar(
+        results_frame, orient="horizontal", length=300, mode="determinate", maximum=100, variable=progress_var
+    )
+    progress_bar.pack(anchor="w", fill="x", pady=(8, 0))
+
+    def update_results():
+        weight_text = weight_var.get().strip()
+        if not weight_text:
+            min_protein_label.config(text="Enter a bodyweight to calculate your minimum protein intake.")
+            logged_protein_label.config(text="")
+            progress_var.set(0)
+            return
+        try:
+            weight = float(weight_text)
+        except ValueError:
+            min_protein_label.config(text="")
+            logged_protein_label.config(text="")
+            progress_var.set(0)
+            return
+
+        min_protein = PROTEIN_PER_LB * weight
+        min_protein_label.config(
+            text=f"Minimum protein intake ({PROTEIN_PER_LB:g} x {weight:g} lbs): {min_protein:.1f} g"
+        )
+
+        _, protein, _, _ = get_daily_macro_totals(conn, date_var.get())
+        protein = protein or 0
+        pct = (protein / min_protein * 100) if min_protein > 0 else 0
+        logged_protein_label.config(
+            text=f"Protein logged for {date_var.get()}: {protein:.1f} g ({pct:.0f}% of minimum)"
+        )
+        progress_var.set(min(max(pct, 0), 100))
+
+    def load(*_):
+        weight = get_bodyweight(conn, date_var.get())
+        weight_var.set(f"{weight:g}" if weight is not None else "")
+        status_label.config(text="")
+        update_results()
+
+    def save_weight():
+        try:
+            weight = float(weight_var.get())
+        except ValueError:
+            status_label.config(text="Bodyweight must be a number.")
+            return
+        if weight <= 0:
+            status_label.config(text="Bodyweight must be positive.")
+            return
+
+        set_bodyweight(conn, date_var.get(), weight)
+        status_label.config(text=f"Saved bodyweight for {date_var.get()}.")
+        update_results()
+
+    ttk.Button(controls_frame, text="Load", command=load).pack(side="left")
+    ttk.Button(weight_frame, text="Save Weight", command=save_weight).pack(side="left")
+
+    load()
+
+
 def main(conn):
     root = tk.Tk()
     root.title("Macro Tracker")
@@ -405,11 +498,13 @@ def main(conn):
     database_tab = ttk.Frame(notebook)
     log_tab = ttk.Frame(notebook)
     graphs_tab = ttk.Frame(notebook)
+    tracking_tab = ttk.Frame(notebook)
 
     notebook.add(add_entry_tab, text="Add Entry")
     notebook.add(database_tab, text="Food Database")
     notebook.add(log_tab, text="Daily Log")
     notebook.add(graphs_tab, text="Graphs")
+    notebook.add(tracking_tab, text="Tracking")
 
     notebook.pack(fill="both", expand=True)
 
@@ -417,6 +512,7 @@ def main(conn):
     build_food_database_tab(database_tab, conn)
     build_daily_log_tab(log_tab, conn)
     build_graphs_tab(graphs_tab, conn)
+    build_tracking_tab(tracking_tab, conn)
 
     root.mainloop()
 
