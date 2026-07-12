@@ -8,4 +8,5 @@ __pycache__/
 *.sqlite3
 build/
 dist/
+dist_v2/
 *.spec
