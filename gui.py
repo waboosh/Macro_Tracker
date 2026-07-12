@@ -677,7 +677,11 @@ def build_food_database_tab(parent, conn):
 
     columns = ("food", "serving", "calories", "protein", "carbs", "fat", "source")
     columns_without_source = ("food", "serving", "calories", "protein", "carbs", "fat")
-    tree = ttk.Treeview(parent, columns=columns, show="headings", height=10)
+
+    tree_frame = ttk.Frame(parent)
+    tree_frame.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+
+    tree = ttk.Treeview(tree_frame, columns=columns, show="headings", height=10)
     headings = {
         "food": "Food",
         "serving": "Serving",
@@ -690,9 +694,13 @@ def build_food_database_tab(parent, conn):
     for col, text in headings.items():
         tree.heading(col, text=text)
     for col in ("serving", "calories", "protein", "carbs", "fat", "source"):
-        tree.column(col, width=85, anchor="e" if col != "source" else "center")
+        tree.column(col, width=85, anchor="e" if col != "source" else "center", stretch=False)
     tree["displaycolumns"] = columns_without_source
-    tree.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+
+    tree_hscroll = ttk.Scrollbar(tree_frame, orient="horizontal", command=tree.xview)
+    tree.configure(xscrollcommand=tree_hscroll.set)
+    tree.pack(side="top", fill="both", expand=True)
+    tree_hscroll.pack(side="bottom", fill="x")
 
     def populate(rows):
         tree.delete(*tree.get_children())
