@@ -62,6 +62,10 @@ def make_scrollable(parent):
     scrollbar.pack(side="right", fill="y")
 
     def scroll(event):
+        # Widgets that scroll their own content (e.g. a Treeview with more rows than fit)
+        # should keep the wheel event instead of it bleeding through to the whole page.
+        if isinstance(event.widget, (ttk.Treeview, tk.Text, tk.Listbox)):
+            return
         canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
 
     canvas.bind("<Enter>", lambda _e: canvas.bind_all("<MouseWheel>", scroll))
@@ -102,13 +106,20 @@ def build_add_entry_tab(parent, conn):
     online_search_button = ttk.Button(online_frame, text="Search USDA Online")
     online_search_button.pack(anchor="w", pady=(2, 5))
 
+    online_tree_frame = ttk.Frame(online_frame)
+    online_tree_frame.pack(fill="x")
+
     online_columns = ("food", "serving", "calories", "protein", "carbs", "fat")
-    online_results_tree = ttk.Treeview(online_frame, columns=online_columns, show="headings", height=5)
+    online_results_tree = ttk.Treeview(online_tree_frame, columns=online_columns, show="headings", height=5)
     for col, text in zip(online_columns, ("Food", "Serving", "Calories", "Protein (g)", "Carbs (g)", "Fat (g)")):
         online_results_tree.heading(col, text=text)
     for col in ("serving", "calories", "protein", "carbs", "fat"):
         online_results_tree.column(col, width=90, anchor="e")
-    online_results_tree.pack(fill="x")
+
+    online_vscroll = ttk.Scrollbar(online_tree_frame, orient="vertical", command=online_results_tree.yview)
+    online_results_tree.configure(yscrollcommand=online_vscroll.set)
+    online_results_tree.pack(side="left", fill="x", expand=True)
+    online_vscroll.pack(side="right", fill="y")
     online_results_by_index = {}
 
     def run_search(*_):
