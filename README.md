@@ -19,8 +19,7 @@ and the app totals up your calories, protein, carbs, and fat for the day.
   range.
 - **Graphs** — chart calories/protein/carbs/fat over a date range, one metric at a time or
   several together, with exact values labeled on each bar.
-- **Tracking** — log your bodyweight (it carries forward day to day so you don't have to re-enter
-  it) and a profile (gender, height, age); see your minimum daily protein target (0.7g per pound
+- **Tracking** — log your bodyweight and a profile (gender, height, age); see your minimum daily protein target (0.7g per pound
   of bodyweight) and progress toward it; and estimate daily calorie targets to gain, maintain, or
   lose weight, based on the Mifflin-St Jeor BMR equation and an activity-level multiplier.
 
