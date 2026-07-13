@@ -51,9 +51,9 @@ pip install -r requirements.txt
 python main.py               # creates/seeds macro_tracker.db and launches the GUI
 ```
 
-`requirements.txt` is pinned to versions resolved on the machine that generated it. If
-`pip install -r requirements.txt` fails due to a Python version/platform mismatch, run
-`pip install matplotlib` instead and let pip pick compatible versions.
+The only third-party dependency is `matplotlib` (used for the Graphs tab); everything else
+is Python's standard library. If you just want to run the app on Windows without installing
+Python at all, use the prebuilt `.exe` instead — see below.
 
 ## Building a standalone desktop app
 
